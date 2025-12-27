@@ -1,0 +1,155 @@
+{
+  "identity": {
+    "persona": "E1",
+    "tone": "Energetic, Competitive, Futuristic, Neon",
+    "audience": "Runners, Gamers, Competitive social groups",
+    "design_principles": [
+      "Fusion over Imitation: Mix Fitness Tracking with Cyberpunk Gaming",
+      "Emotion First: Adrenaline and Achievement",
+      "Content is King: The Map is the Hero",
+      "Zoom In: Focus on the Runner's Territory",
+      "Negative Space: Clean HUDs for visibility",
+      "Contrast: Neon on Void Black"
+    ]
+  },
+  "typography": {
+    "headings": {
+      "family": "Unbounded, sans-serif",
+      "weights": ["700", "900"],
+      "usage": "Hero titles, Stats, Leaderboard Ranks",
+      "letterSpacing": "tracking-tighter"
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "UI text, descriptions, form inputs",
+      "letterSpacing": "tracking-normal"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["400"],
+      "usage": "Coordinates, Speed metrics, Timers"
+    }
+  },
+  "colors": {
+    "archetype": "Electric & Neon",
+    "palette": {
+      "background": {
+        "default": "#09090B",
+        "secondary": "#18181B",
+        "tertiary": "#27272A"
+      },
+      "primary": {
+        "default": "#CCF381",
+        "foreground": "#000000",
+        "hover": "#B8E065"
+      },
+      "secondary": {
+        "default": "#7000FF",
+        "foreground": "#FFFFFF",
+        "hover": "#5E00D6"
+      },
+      "accent": {
+        "default": "#FF003C",
+        "foreground": "#FFFFFF",
+        "glow": "0 0 20px rgba(255, 0, 60, 0.5)"
+      },
+      "neutral": {
+        "100": "#F4F4F5",
+        "500": "#71717A",
+        "900": "#18181B"
+      }
+    },
+    "gradients": {
+      "hero": "linear-gradient(135deg, #CCF381 0%, #7000FF 100%)",
+      "glass": "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "backdrop_blur": "backdrop-blur-xl",
+      "background": "bg-black/40",
+      "border": "border-white/10",
+      "shadow": "shadow-[0_8px_32px_rgba(0,0,0,0.25)]"
+    },
+    "neon_glow": {
+      "box_shadow": "0 0 10px var(--primary), 0 0 20px var(--primary)"
+    },
+    "textures": {
+      "noise": "url('/assets/noise.png') opacity-5",
+      "grid": "linear-gradient(to right, #333 1px, transparent 1px), linear-gradient(to bottom, #333 1px, transparent 1px)"
+    }
+  },
+  "layout": {
+    "grid_system": "Bento Grid (Mode A for Marketing, Mode B for Dashboard)",
+    "spacing": "Generous (2x standard)",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "mobile_first": "Stack vertically on mobile, expand to grid on lg screens"
+  },
+  "components": {
+    "buttons": {
+      "primary": "rounded-full bg-primary text-primary-foreground hover:shadow-[0_0_20px_rgba(204,243,129,0.4)] transition-all duration-300 font-bold uppercase tracking-wide",
+      "secondary": "rounded-full border border-white/20 bg-transparent text-white hover:bg-white/10 transition-all"
+    },
+    "cards": {
+      "style": "Tracing Beam or Glassmorphism",
+      "base": "bg-zinc-900/50 border border-white/5 rounded-2xl overflow-hidden relative group"
+    },
+    "inputs": {
+      "style": "bg-zinc-900/80 border-white/10 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-12"
+    },
+    "hud": {
+      "container": "fixed bottom-8 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[400px] bg-black/60 backdrop-blur-xl border border-white/10 rounded-full p-4 flex justify-between items-center z-50"
+    }
+  },
+  "motion": {
+    "transitions": "transition-all duration-300 ease-out",
+    "hover": "hover:-translate-y-1 hover:shadow-lg",
+    "page_load": "animate-in fade-in slide-in-from-bottom-4 duration-700",
+    "libraries": ["framer-motion", "lenis"]
+  },
+  "media": {
+    "image_style": "High contrast, neon lighting, motion blur, dark environments",
+    "icons": "Lucide React (default), Phosphor Icons (for specific UI needs)",
+    "image_urls": {
+      "hero_bg": "https://images.unsplash.com/photo-1725435003920-7a5e26332e40?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "runner_action": "https://images.unsplash.com/photo-1758506971661-33fe941ca1e2?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "map_texture": "https://images.unsplash.com/photo-1639060015191-9d83063eab2a?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "trophy_gold": "https://images.unsplash.com/photo-1622102686103-dd4ea18f1d0e?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "event_banner": "https://images.unsplash.com/photo-1756991028884-92aadc363f05?crop=entropy&cs=srgb&fm=jpg&q=85"
+    }
+  },
+  "tech_stack": {
+    "framework": "Vite",
+    "styling": "Tailwind CSS",
+    "components": "Shadcn UI",
+    "maps": "React Map GL (Mapbox)",
+    "charts": "Recharts",
+    "state": "Zustand or React Context",
+    "animations": "Framer Motion"
+  },
+  "instructions_to_main_agent": [
+    "Implement the 'Intertia' brand with a dark, neon-accented aesthetic.",
+    "Use the 'Unbounded' font for all major headings to give a futuristic feel.",
+    "Ensure the Map component is the central focus of the 'Live Run' and 'Dashboard' pages.",
+    "Use 'Glassmorphism' for HUD elements overlaying the map.",
+    "Implement the 'Bento Grid' layout for the Dashboard stats.",
+    "Use the provided image URLs for placeholders where appropriate.",
+    "Strictly follow the color palette: Void Black background, Neon Lime primary.",
+    "Ensure all interactive elements have hover states and transitions.",
+    "Add 'data-testid' to all interactive elements."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic 'AI slop' designs; push for high contrast and unique layouts.",
+    "Do not use gradients for dark colors; use solid deep blacks/grays.",
+    "Create depth with z-index and layered glass effects.",
+    "Do not use 'transition: all'; specify properties.",
+    "Do not center-align the main app container.",
+    "Use modern button styles (pill-shaped, sharp).",
+    "Never use emojis as icons.",
+    "Add micro-animations to every interaction.",
+    "Use generous spacing (2-3x standard).",
+    "Use 'sonner' for toasts.",
+    "Use named exports for components and default exports for pages."
+  ]
+}

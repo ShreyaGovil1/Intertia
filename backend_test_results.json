@@ -1,0 +1,330 @@
+{
+  "summary": {
+    "tests_run": 20,
+    "tests_passed": 18,
+    "success_rate": 0.9
+  },
+  "results": [
+    {
+      "test": "Root API",
+      "success": true,
+      "details": "Status: 200",
+        "response_data": {
+        "message": "Intertia API",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "test": "Health Check",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "status": "healthy"
+      }
+    },
+    {
+      "test": "Leaderboard - area",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Leaderboard - distance",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Leaderboard - runs",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Leaderboard - streak",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Get All Badges",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": [
+        {
+          "badge_id": "first_run",
+          "name": "First Steps",
+          "description": "Complete your first run",
+          "icon": "footprints",
+          "criteria": {
+            "total_runs": 1
+          }
+        },
+        {
+          "badge_id": "area_100",
+          "name": "Territory Starter",
+          "description": "Claim 100 sq meters",
+          "icon": "map",
+          "criteria": {
+            "total_area_m2": 100
+          }
+        },
+        {
+          "badge_id": "area_1000",
+          "name": "Land Baron",
+          "description": "Claim 1,000 sq meters",
+          "icon": "crown",
+          "criteria": {
+            "total_area_m2": 1000
+          }
+        },
+        {
+          "badge_id": "area_10000",
+          "name": "Territory King",
+          "description": "Claim 10,000 sq meters",
+          "icon": "trophy",
+          "criteria": {
+            "total_area_m2": 10000
+          }
+        },
+        {
+          "badge_id": "distance_5k",
+          "name": "5K Runner",
+          "description": "Run 5km total",
+          "icon": "running",
+          "criteria": {
+            "total_distance_m": 5000
+          }
+        },
+        {
+          "badge_id": "distance_marathon",
+          "name": "Marathon Legend",
+          "description": "Run 42.195km total",
+          "icon": "medal",
+          "criteria": {
+            "total_distance_m": 42195
+          }
+        },
+        {
+          "badge_id": "streak_7",
+          "name": "Week Warrior",
+          "description": "7 day running streak",
+          "icon": "fire",
+          "criteria": {
+            "current_streak": 7
+          }
+        },
+        {
+          "badge_id": "streak_30",
+          "name": "Unstoppable",
+          "description": "30 day running streak",
+          "icon": "zap",
+          "criteria": {
+            "current_streak": 30
+          }
+        },
+        {
+          "badge_id": "runs_10",
+          "name": "Dedicated",
+          "description": "Complete 10 runs",
+          "icon": "star",
+          "criteria": {
+            "total_runs": 10
+          }
+        },
+        {
+          "badge_id": "runs_100",
+          "name": "Century Club",
+          "description": "Complete 100 runs",
+          "icon": "award",
+          "criteria": {
+            "total_runs": 100
+          }
+        }
+      ]
+    },
+    {
+      "test": "Get Current Season",
+      "success": false,
+      "details": "Status: 520, Expected: 200, Response: Internal Server Error",
+      "response_data": {
+        "raw_response": "Internal Server Error"
+      }
+    },
+    {
+      "test": "Get All Seasons",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": [
+        {
+          "season_id": "season_202512",
+          "name": "December 2025 Championship",
+          "description": "Claim the most territory this month to win!",
+          "start_date": "2025-12-01T00:00:00+00:00",
+          "end_date": "2025-12-31T23:59:59+00:00",
+          "prizes": [
+            {
+              "rank": 1,
+              "name": "Gold Champion",
+              "badge": "champion_gold"
+            },
+            {
+              "rank": 2,
+              "name": "Silver Runner",
+              "badge": "champion_silver"
+            },
+            {
+              "rank": 3,
+              "name": "Bronze Warrior",
+              "badge": "champion_bronze"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "test": "Get Groups",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Get Claims",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Auth with Session Token",
+      "success": false,
+      "details": "Status: 520, Expected: 200, Response: Internal Server Error",
+      "response_data": {
+        "raw_response": "Internal Server Error"
+      }
+    },
+    {
+      "test": "User Registration",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyX2VmMGM2NjFkODM4NiIsImV4cCI6MTc2NjkxODE0OH0.I6ZG6n9C9Lafc-23tO8z5_1UN6irNY2dR_7uLyUKGEg",
+        "token_type": "bearer",
+        "user": {
+          "user_id": "user_ef0c661d8386",
+          "email": "test.runner.1766831747@example.com",
+          "name": "Test Runner",
+          "picture": null,
+          "total_distance_m": 0.0,
+          "total_area_m2": 0.0,
+          "total_runs": 0,
+          "current_streak": 0,
+          "badges": [],
+          "created_at": "2025-12-27T10:35:47.927058+00:00"
+        }
+      }
+    },
+    {
+      "test": "Get Current User",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "user_id": "user_ef0c661d8386",
+        "email": "test.runner.1766831747@example.com",
+        "name": "Test Runner",
+        "picture": null,
+        "total_distance_m": 0.0,
+        "total_area_m2": 0.0,
+        "total_runs": 0,
+        "current_streak": 0,
+        "badges": [],
+        "created_at": "2025-12-27T10:35:47.927058+00:00"
+      }
+    },
+    {
+      "test": "Get User Profile",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "user_id": "user_ef0c661d8386",
+        "email": "test.runner.1766831747@example.com",
+        "name": "Test Runner",
+        "picture": null,
+        "total_distance_m": 0.0,
+        "total_area_m2": 0.0,
+        "total_runs": 0,
+        "current_streak": 0,
+        "badges": [],
+        "created_at": "2025-12-27T10:35:47.927058+00:00"
+      }
+    },
+    {
+      "test": "Get User Runs",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": []
+    },
+    {
+      "test": "Start Run",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "run_id": "run_f5948fdcc592",
+        "user_id": "user_ef0c661d8386",
+        "status": "active",
+        "run_type": "solo",
+        "group_id": null,
+        "started_at": "2025-12-27T10:35:48.341606+00:00",
+        "ended_at": null,
+        "distance_m": 0.0,
+        "area_claimed_m2": 0.0,
+        "points_count": 0,
+        "claims": []
+      }
+    },
+    {
+      "test": "Add GPS Points",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "added": 2,
+        "distance_added": 14.173617226377072
+      }
+    },
+    {
+      "test": "Get Run Details",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "run_id": "run_f5948fdcc592",
+        "user_id": "user_ef0c661d8386",
+        "status": "active",
+        "run_type": "solo",
+        "group_id": null,
+        "started_at": "2025-12-27T10:35:48.341606+00:00",
+        "ended_at": null,
+        "distance_m": 14.173617226377072,
+        "area_claimed_m2": 0.0,
+        "points_count": 2,
+        "claims": []
+      }
+    },
+    {
+      "test": "End Run",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "run_id": "run_f5948fdcc592",
+        "user_id": "user_ef0c661d8386",
+        "status": "completed",
+        "run_type": "solo",
+        "group_id": null,
+        "started_at": "2025-12-27T10:35:48.341606+00:00",
+        "ended_at": "2025-12-27T10:35:48.520253+00:00",
+        "distance_m": 14.173617226377072,
+        "area_claimed_m2": 0.0,
+        "points_count": 2,
+        "claims": []
+      }
+    }
+  ]
+}
