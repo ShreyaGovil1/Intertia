@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  api:
+    build: .
+    container_name: intertia-api
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=intertia
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-this}
+      - CORS_ORIGINS=*
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    networks:
+      - intertia-network
+
+  # MongoDB Database
+  mongo:
+    image: mongo:7.0
+    container_name: intertia-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    networks:
+      - intertia-network
+
+networks:
+  intertia-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local

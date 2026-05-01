@@ -10,7 +10,7 @@ MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 DB_NAME = os.environ.get('DB_NAME', 'test_database')
 
 # CORS
-CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://localhost:8000,http://localhost:8001').split(',')
 
 # Anti-cheat and geometries
 MAX_RUNNING_SPEED_MPS = 12.0

@@ -2,15 +2,19 @@ from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 import os
+import sys
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).parent.parent
+sys.path.append(str(Path(__file__).parent))
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any, cast
 import uuid
 from datetime import datetime, timezone, timedelta
-import httpx
+
 import json
 from shapely.geometry import shape, Polygon, LineString, Point
 from shapely.ops import unary_union
@@ -18,7 +22,6 @@ import bcrypt
 import jwt
 import asyncio
 
-ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from database.db import db, client
@@ -74,7 +77,7 @@ def decode_token(token: str) -> Optional[str]:
         return None
 
 async def get_current_user(request: Request) -> Dict[str, Any]:
-    # Check cookie first (for Emergent OAuth)
+    # Check cookie first (for session-based auth)
     session_token = request.cookies.get("session_token")
     if session_token:
         session = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
@@ -141,78 +144,7 @@ async def login(credentials: UserLogin) -> TokenResponse:
     user_response = UserResponse(**{k: v for k, v in cast(Dict[str, Any], user).items() if k != "password_hash"})
     return TokenResponse(access_token=token, user=user_response)
 
-@api_router.get("/auth/session")
-async def get_session_data(request: Request, response: Response) -> Dict[str, Any]:
-    """Exchange Emergent session_id for user session"""
-    session_id = request.headers.get("X-Session-ID")
-    if not session_id:
-        raise HTTPException(status_code=400, detail="Missing session ID")
-    
-    # Get user data from Emergent auth
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id}
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session")
-        
-        oauth_data = resp.json()
-    
-    # Find or create user
-    user = await db.users.find_one({"email": oauth_data["email"]}, {"_id": 0})
-    now = datetime.now(timezone.utc).isoformat()
-    
-    if not user:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user = {
-            "user_id": user_id,
-            "email": oauth_data["email"],
-            "name": oauth_data["name"],
-            "picture": oauth_data.get("picture"),
-            "total_distance_m": 0,
-            "total_area_m2": 0,
-            "total_runs": 0,
-            "current_streak": 0,
-            "last_run_date": None,
-            "badges": [],
-            "created_at": now
-        }
-        await db.users.insert_one(user)
-    else:
-        # Update profile picture if changed
-        if oauth_data.get("picture") and user.get("picture") != oauth_data["picture"]:
-            await db.users.update_one(
-                {"user_id": user["user_id"]},
-                {"$set": {"picture": oauth_data["picture"]}}
-            )
-            user["picture"] = oauth_data["picture"]
-    
-    # Create session
-    session_token = oauth_data.get("session_token", f"sess_{uuid.uuid4().hex}")
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
-    await db.user_sessions.update_one(
-        {"user_id": user["user_id"]},
-        {"$set": {
-            "session_token": session_token,
-            "expires_at": expires_at.isoformat(),
-            "created_at": now
-        }},
-        upsert=True
-    )
-    
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7 * 24 * 60 * 60
-    )
-    
-    return {k: v for k, v in user.items() if k != "password_hash"}
+
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(request: Request) -> UserResponse:
@@ -935,7 +867,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=CORS_ORIGINS.split(','),
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

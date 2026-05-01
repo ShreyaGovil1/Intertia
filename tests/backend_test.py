@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 class IntertiaAPITester:
-    def __init__(self, base_url="https://capturerun.preview.emergentagent.com/api"):
+    def __init__(self, base_url="http://localhost:8000/api"):
         self.base_url = base_url
         self.token = None
         self.user_id = None
@@ -341,7 +341,7 @@ class IntertiaAPITester:
 
     def run_all_tests(self):
         """Run all test suites"""
-        print("🚀 Starting Intertia API Test Suite")
+        print("[*] Starting Intertia API Test Suite")
         print(f"📍 Testing against: {self.base_url}")
         
         # Basic tests (no auth required)
