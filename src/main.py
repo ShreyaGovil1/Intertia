@@ -864,10 +864,11 @@ async def health() -> Dict[str, str]:
 # Include router and middleware
 app.include_router(api_router)
 
+# Robust CORS for both local and Vercel environments
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],
+    allow_credentials=False, # Temporarily set to False to ensure error messages are visible
     allow_methods=["*"],
     allow_headers=["*"],
 )
