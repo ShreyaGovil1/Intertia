@@ -865,10 +865,16 @@ async def health() -> Dict[str, str]:
 app.include_router(api_router)
 
 # Robust CORS for both local and Vercel environments
+# We allow credentials but specify the origins instead of using "*"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False, # Temporarily set to False to ensure error messages are visible
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://intertia-ui.vercel.app",
+    ],
+    allow_origin_regex="https://.*\.vercel\.app", # This allows any of your vercel deployments
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
