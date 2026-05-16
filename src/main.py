@@ -18,6 +18,7 @@ from datetime import datetime, timezone, timedelta
 import json
 from shapely.geometry import shape, Polygon, LineString, Point
 from shapely.ops import unary_union
+import h3
 import bcrypt
 import jwt
 import asyncio
@@ -28,7 +29,7 @@ from database.db import db, client
 from config.config import (
     JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_HOURS,
     MAX_RUNNING_SPEED_MPS, MIN_ACCURACY_M, MIN_POLYGON_AREA_M2, MAX_CLOSE_DISTANCE_M,
-    CORS_ORIGINS
+    CORS_ORIGINS, H3_RESOLUTION, MIN_HEX_CLAIM_COUNT
 )
 from auth.auth import hash_password, verify_password, create_access_token, decode_token, get_current_user
 from utils.utils import haversine_distance
@@ -323,10 +324,164 @@ async def get_run(run_id: str, request: Request) -> RunResponse:
         raise HTTPException(status_code=404, detail="Run not found")
     return RunResponse(**run)
 
-# ===================== CLAIMS ENDPOINTS =====================
+# ===================== H3 HEXAGON ENDPOINTS =====================
+@api_router.get("/hexagons")
+async def get_hexagons(min_lat: float = -90, max_lat: float = 90, min_lon: float = -180, max_lon: float = 180) -> List[Dict[str, Any]]:
+    """Get all claimed H3 hexagons within a bounding box"""
+    hexagons = await db.hexagons.find(
+        {
+            "center_lat": {"$gte": min_lat, "$lte": max_lat},
+            "center_lon": {"$gte": min_lon, "$lte": max_lon}
+        },
+        {"_id": 0}
+    ).limit(5000).to_list(5000)
+    
+    # Calculate decay for each hex
+    now = datetime.now(timezone.utc)
+    for hx in hexagons:
+        last_maintained = hx.get("last_maintained_at", hx["claimed_at"])
+        if isinstance(last_maintained, str):
+            last_maintained = datetime.fromisoformat(last_maintained.replace("Z", "+00:00"))
+        if last_maintained.tzinfo is None:
+            last_maintained = last_maintained.replace(tzinfo=timezone.utc)
+        days_since = (now - last_maintained).days
+        hx["decay_percent"] = min(days_since * 5, 100)
+    
+    return hexagons
+
+@api_router.get("/hexagons/user/{user_id}")
+async def get_user_hexagons(user_id: str) -> List[Dict[str, Any]]:
+    hexagons = await db.hexagons.find({"owner_id": user_id}, {"_id": 0}).to_list(2000)
+    return hexagons
+
+@api_router.post("/runs/{run_id}/claim-hexes")
+async def claim_hexes_from_run(run_id: str, request: Request) -> Dict[str, Any]:
+    """Convert a run's GPS trace into H3 hexagons and claim them"""
+    user = await get_current_user(request)
+    run = await db.runs.find_one({"run_id": run_id, "user_id": user["user_id"]}, {"_id": 0})
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    points = run.get("points", [])
+    if len(points) < 5:
+        raise HTTPException(status_code=400, detail="Not enough GPS points to claim territory")
+    
+    # Convert GPS points to H3 hex indices
+    hex_indices = set()
+    for pt in points:
+        h3_index = h3.latlng_to_cell(pt["lat"], pt["lon"], H3_RESOLUTION)
+        hex_indices.add(h3_index)
+    
+    if len(hex_indices) < MIN_HEX_CLAIM_COUNT:
+        raise HTTPException(status_code=400, detail=f"Run covers only {len(hex_indices)} hexes, need at least {MIN_HEX_CLAIM_COUNT}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    claimed_count = 0
+    flipped_count = 0
+    total_area_m2 = 0
+    newly_claimed_hexes = []
+    
+    for h3_index in hex_indices:
+        # Get hex center for storage
+        center_lat, center_lon = h3.cell_to_latlng(h3_index)
+        # Get hex boundary for area calculation
+        boundary = h3.cell_to_boundary(h3_index)
+        hex_area = h3.cell_area(h3_index, unit='m^2')
+        
+        # Check if hex already claimed
+        existing = await db.hexagons.find_one({"h3_index": h3_index}, {"_id": 0})
+        
+        if existing:
+            if existing["owner_id"] == user["user_id"]:
+                # Already own it — refresh maintenance date
+                await db.hexagons.update_one(
+                    {"h3_index": h3_index},
+                    {"$set": {"last_maintained_at": now, "source_run_id": run_id}}
+                )
+            else:
+                # Flip it! Steal from other user
+                old_owner = existing["owner_id"]
+                await db.hexagons.update_one(
+                    {"h3_index": h3_index},
+                    {"$set": {
+                        "owner_id": user["user_id"],
+                        "owner_name": user["name"],
+                        "claimed_at": now,
+                        "last_maintained_at": now,
+                        "source_run_id": run_id
+                    }}
+                )
+                flipped_count += 1
+                # Reduce old owner's total area
+                await db.users.update_one(
+                    {"user_id": old_owner},
+                    {"$inc": {"total_area_m2": -hex_area}}
+                )
+        else:
+            # New claim
+            hex_doc = {
+                "h3_index": h3_index,
+                "owner_id": user["user_id"],
+                "owner_name": user["name"],
+                "center_lat": center_lat,
+                "center_lon": center_lon,
+                "boundary": [list(coord) for coord in boundary],
+                "area_m2": hex_area,
+                "claimed_at": now,
+                "last_maintained_at": now,
+                "source_run_id": run_id
+            }
+            await db.hexagons.insert_one(hex_doc)
+        
+        claimed_count += 1
+        total_area_m2 += hex_area
+        newly_claimed_hexes.append({
+            "h3_index": h3_index,
+            "center_lat": center_lat,
+            "center_lon": center_lon
+        })
+    
+    # Update run with hex claim info
+    await db.runs.update_one(
+        {"run_id": run_id},
+        {"$set": {
+            "hex_claims": list(hex_indices),
+            "hex_count": len(hex_indices),
+            "area_claimed_m2": total_area_m2
+        }}
+    )
+    
+    # Update user's total area
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$inc": {"total_area_m2": total_area_m2}}
+    )
+    
+    # Broadcast live event to all dashboard viewers
+    await dashboard_manager.broadcast({
+        "type": "territory_claimed",
+        "user_id": user["user_id"],
+        "user_name": user["name"],
+        "hex_count": claimed_count,
+        "flipped_count": flipped_count,
+        "area_m2": total_area_m2,
+        "hexes": newly_claimed_hexes[:20],  # Limit broadcast payload
+        "timestamp": now
+    })
+    
+    return {
+        "claimed_count": claimed_count,
+        "flipped_count": flipped_count,
+        "total_area_m2": total_area_m2,
+        "hex_indices": list(hex_indices),
+        "message": f"Claimed {claimed_count} hexagons ({flipped_count} stolen)! Total: {total_area_m2:.0f} m²"
+    }
+
+# ===================== LEGACY CLAIMS ENDPOINTS =====================
 @api_router.get("/claims")
 async def get_claims(min_lat: float = -90, max_lat: float = 90, min_lon: float = -180, max_lon: float = 180) -> List[Dict[str, Any]]:
-    """Get claims within a bounding box"""
+    """Get claims within a bounding box (legacy polygon-based)"""
     claims = await db.claims.find(
         {
             "center_lat": {"$gte": min_lat, "$lte": max_lat},
@@ -335,7 +490,6 @@ async def get_claims(min_lat: float = -90, max_lat: float = 90, min_lon: float =
         {"_id": 0}
     ).limit(500).to_list(500)
     
-    # Calculate decay for each claim
     now = datetime.now(timezone.utc)
     for claim in claims:
         last_maintained = claim.get("last_maintained_at", claim["created_at"])
@@ -343,9 +497,8 @@ async def get_claims(min_lat: float = -90, max_lat: float = 90, min_lon: float =
             last_maintained = datetime.fromisoformat(last_maintained.replace("Z", "+00:00"))
         if last_maintained.tzinfo is None:
             last_maintained = last_maintained.replace(tzinfo=timezone.utc)
-        
         days_since = (now - last_maintained).days
-        claim["decay_percent"] = min(days_since * 5, 100)  # 5% decay per day
+        claim["decay_percent"] = min(days_since * 5, 100)
     
     return claims
 
@@ -603,7 +756,45 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@api_router.websocket("/ws/run/{run_id}")
+# ===================== DASHBOARD LIVE WEBSOCKET =====================
+class DashboardManager:
+    """Manages global WebSocket connections for the Dashboard live map."""
+    def __init__(self):
+        self.connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self.connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket) -> None:
+        if websocket in self.connections:
+            self.connections.remove(websocket)
+    
+    async def broadcast(self, message: Dict[str, Any]) -> None:
+        dead = []
+        for ws in self.connections:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+dashboard_manager = DashboardManager()
+
+@app.websocket("/api/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket) -> None:
+    """Global WebSocket for live territory events on the Dashboard map."""
+    await dashboard_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        dashboard_manager.disconnect(websocket)
+
+@app.websocket("/api/ws/run/{run_id}")
 async def websocket_run(websocket: WebSocket, run_id: str) -> None:
     await manager.connect(websocket, run_id)
     try:

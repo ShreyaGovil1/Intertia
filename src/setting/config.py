@@ -18,8 +18,13 @@ MIN_ACCURACY_M = 50.0
 MIN_POLYGON_AREA_M2 = 100.0
 MAX_CLOSE_DISTANCE_M = 30.0
 
+# H3 hexagonal grid settings
+H3_RESOLUTION = 11  # ~2,000 sq meters per hex - good for running granularity
+MIN_HEX_CLAIM_COUNT = 3  # Minimum hexes a run must cover to be considered valid
+
 __all__ = [
     'JWT_SECRET', 'JWT_ALGORITHM', 'ACCESS_TOKEN_EXPIRE_HOURS',
     'MONGO_URL', 'DB_NAME', 'CORS_ORIGINS',
-    'MAX_RUNNING_SPEED_MPS', 'MIN_ACCURACY_M', 'MIN_POLYGON_AREA_M2', 'MAX_CLOSE_DISTANCE_M'
+    'MAX_RUNNING_SPEED_MPS', 'MIN_ACCURACY_M', 'MIN_POLYGON_AREA_M2', 'MAX_CLOSE_DISTANCE_M',
+    'H3_RESOLUTION', 'MIN_HEX_CLAIM_COUNT'
 ]
