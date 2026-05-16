@@ -20,7 +20,7 @@ MAX_CLOSE_DISTANCE_M = 30.0
 
 # H3 hexagonal grid settings
 H3_RESOLUTION = 11  # ~2,000 sq meters per hex - good for running granularity
-MIN_HEX_CLAIM_COUNT = 3  # Minimum hexes a run must cover to be considered valid
+MIN_HEX_CLAIM_COUNT = 1  # Minimum hexes a run must cover to be considered valid
 
 __all__ = [
     'JWT_SECRET', 'JWT_ALGORITHM', 'ACCESS_TOKEN_EXPIRE_HOURS',
