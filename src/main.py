@@ -64,7 +64,13 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    if not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(password.encode(), hashed.encode())
+    except Exception:
+        # Fallback for old plain-text passwords in development DBs
+        return password == hashed
 
 def create_access_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
@@ -141,7 +147,11 @@ async def register(user_data: UserCreate) -> TokenResponse:
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin) -> TokenResponse:
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
-    if not user or not verify_password(credentials.password, user.get("password_hash", "")):
+    
+    # Check both password_hash and password (for older DB records)
+    hashed_pass = user.get("password_hash") or user.get("password") or ""
+    
+    if not user or not verify_password(credentials.password, hashed_pass):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_access_token(user["user_id"])
