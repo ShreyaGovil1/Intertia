@@ -45,6 +45,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Intertia API", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 
+import traceback
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = f"Global exception: {str(exc)}\n{traceback.format_exc()}"
+    print(error_msg)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)},
+        headers={"Access-Control-Allow-Origin": request.headers.get("origin", "*"), "Access-Control-Allow-Credentials": "true"}
+    )
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1161,7 +1172,7 @@ app.add_middleware(
         "http://localhost:5174",
         "https://intertia-ui.vercel.app",
     ],
-    allow_origin_regex="https://.*\.vercel\.app", # This allows any of your vercel deployments
+    allow_origin_regex=r"https://.*\.vercel\.app", # This allows any of your vercel deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
