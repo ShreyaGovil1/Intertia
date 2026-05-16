@@ -53,8 +53,11 @@ logger = logging.getLogger(__name__)
 from database.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
     RunPointInput, RunStart, RunResponse, ClaimResponse,
-    GroupSession, BadgeResponse, SeasonResponse
+    GroupSession, BadgeResponse, SeasonResponse,
+    GoogleAuth, ForgotPassword, ResetPassword
 )
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 # ===================== AUTH HELPERS =====================
 def hash_password(password: str) -> str:
@@ -144,6 +147,90 @@ async def login(credentials: UserLogin) -> TokenResponse:
     token = create_access_token(user["user_id"])
     user_response = UserResponse(**{k: v for k, v in cast(Dict[str, Any], user).items() if k != "password_hash"})
     return TokenResponse(access_token=token, user=user_response)
+
+
+@api_router.post("/auth/google", response_model=TokenResponse)
+async def google_login(auth_data: GoogleAuth) -> TokenResponse:
+    try:
+        # Note: In production, pass the exact CLIENT_ID to verify_oauth2_token.
+        # We pass None here to allow any client ID for dev purposes, but it still verifies Google's signature.
+        idinfo = id_token.verify_oauth2_token(auth_data.credential, google_requests.Request(), None)
+        email = idinfo['email']
+        name = idinfo.get('name', email.split('@')[0])
+        picture = idinfo.get('picture', None)
+
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+        if not user:
+            # Create user if it doesn't exist
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            now = datetime.now(timezone.utc).isoformat()
+            user_doc = {
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "password_hash": "", # No password for Google users
+                "picture": picture,
+                "total_distance_m": 0,
+                "total_area_m2": 0,
+                "total_runs": 0,
+                "current_streak": 0,
+                "last_run_date": None,
+                "badges": [],
+                "created_at": now
+            }
+            await db.users.insert_one(user_doc)
+            user = user_doc
+
+        token = create_access_token(user["user_id"])
+        user_response = UserResponse(**{k: v for k, v in cast(Dict[str, Any], user).items() if k != "password_hash"})
+        return TokenResponse(access_token=token, user=user_response)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPassword) -> Dict[str, str]:
+    user = await db.users.find_one({"email": data.email})
+    if not user:
+        # Don't reveal if email exists or not
+        return {"message": "If an account with that email exists, a reset token has been generated."}
+    
+    # Generate a simple 6-digit code for local dev instead of email
+    import random
+    reset_code = str(random.randint(100000, 999999))
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    await db.users.update_one(
+        {"email": data.email},
+        {"$set": {"reset_token": reset_code, "reset_token_expires": expire.isoformat()}}
+    )
+    
+    # In a real app, send an email. For dev, we return the token in the response so the UI can prefill it.
+    return {"message": "Reset code generated", "dev_token": reset_code}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPassword) -> Dict[str, str]:
+    user = await db.users.find_one({"reset_token": data.token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        
+    expires_at = datetime.fromisoformat(user["reset_token_expires"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=400, detail="Reset token expired")
+        
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {"password_hash": hash_password(data.new_password)},
+            "$unset": {"reset_token": "", "reset_token_expires": ""}
+        }
+    )
+    
+    return {"message": "Password updated successfully"}
 
 
 

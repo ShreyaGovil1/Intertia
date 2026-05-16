@@ -13,6 +13,19 @@ class UserLogin(BaseModel):
     password: str
 
 
+class GoogleAuth(BaseModel):
+    credential: str
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     user_id: str
