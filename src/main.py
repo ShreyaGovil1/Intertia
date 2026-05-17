@@ -305,20 +305,26 @@ async def add_run_points(run_id: str, points: List[RunPointInput], request: Requ
     valid_points = []
     total_distance = 0
     last_point = None
-    
-    # Get last point from existing run
+
+    # Get last stored point to anchor distance calc and dedup
+    last_stored_timestamp = None
     if run.get("points"):
         last_point = run["points"][-1]
-    
+        last_stored_timestamp = last_point.get("timestamp")
+
     for pt in points:
+        # Dedup: skip points already stored (same or older timestamp)
+        if last_stored_timestamp and pt.timestamp <= last_stored_timestamp:
+            continue
+
         # Anti-cheat validation
         if pt.accuracy_m > MIN_ACCURACY_M:
             continue  # Skip inaccurate points
-        
+
         if pt.speed_mps and pt.speed_mps > MAX_RUNNING_SPEED_MPS:
             logger.warning(f"Suspicious speed detected: {pt.speed_mps} m/s for run {run_id}")
             continue
-        
+
         point_doc = {
             "timestamp": pt.timestamp,
             "lat": pt.lat,
@@ -328,7 +334,7 @@ async def add_run_points(run_id: str, points: List[RunPointInput], request: Requ
             "heading": pt.heading
         }
         valid_points.append(point_doc)
-        
+
         # Calculate distance from last point
         if last_point:
             dist = haversine_distance(
@@ -336,7 +342,7 @@ async def add_run_points(run_id: str, points: List[RunPointInput], request: Requ
                 pt.lat, pt.lon
             )
             total_distance += dist
-        
+
         last_point = point_doc
     
     if valid_points:
@@ -384,8 +390,15 @@ async def end_run(run_id: str, request: Request) -> RunResponse:
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     
+    # Idempotency guard — prevent double-counting on retries
+    if run.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="Run already ended")
+
     now = datetime.now(timezone.utc).isoformat()
-    
+
+    # Update streak BEFORE setting last_run_date so it sees the previous run date
+    await update_streak(user["user_id"])
+
     # Update user stats
     await db.users.update_one(
         {"user_id": user["user_id"]},
@@ -398,13 +411,10 @@ async def end_run(run_id: str, request: Request) -> RunResponse:
             "$set": {"last_run_date": now}
         }
     )
-    
-    # Update streak
-    await update_streak(user["user_id"])
-    
+
     # Check for badges
     await check_badges(user["user_id"])
-    
+
     await db.runs.update_one(
         {"run_id": run_id},
         {"$set": {"status": "completed", "ended_at": now}}
@@ -460,6 +470,15 @@ async def get_hexagons(min_lat: float = -90, max_lat: float = 90, min_lon: float
 @api_router.get("/hexagons/user/{user_id}")
 async def get_user_hexagons(user_id: str) -> List[Dict[str, Any]]:
     hexagons = await db.hexagons.find({"owner_id": user_id}, {"_id": 0}).to_list(2000)
+    now = datetime.now(timezone.utc)
+    for hx in hexagons:
+        last_maintained = hx.get("last_maintained_at", hx.get("claimed_at"))
+        if isinstance(last_maintained, str):
+            last_maintained = datetime.fromisoformat(last_maintained.replace("Z", "+00:00"))
+        if last_maintained and last_maintained.tzinfo is None:
+            last_maintained = last_maintained.replace(tzinfo=timezone.utc)
+        days_since = (now - last_maintained).days if last_maintained else 0
+        hx["decay_percent"] = min(days_since * 5, 100)
     return hexagons
 
 @api_router.post("/runs/{run_id}/claim-hexes")
@@ -470,7 +489,9 @@ async def claim_hexes_from_run(run_id: str, request: Request) -> Dict[str, Any]:
     
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    
+    if run.get("status") not in ("active", "completed"):
+        raise HTTPException(status_code=400, detail="Run is not in a claimable state")
+
     points = run.get("points", [])
     if len(points) < 5:
         raise HTTPException(status_code=400, detail="Not enough GPS points to claim territory")
@@ -485,24 +506,26 @@ async def claim_hexes_from_run(run_id: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"Run covers only {len(hex_indices)} hexes, need at least {MIN_HEX_CLAIM_COUNT}")
     
     now = datetime.now(timezone.utc).isoformat()
-    claimed_count = 0
+    newly_claimed_count = 0
     flipped_count = 0
-    total_area_m2 = 0
+    newly_claimed_area_m2 = 0  # Only area from new + flipped hexes (not maintenance)
+    total_hex_area_m2 = 0      # Total area of all touched hexes (for run record)
     newly_claimed_hexes = []
-    
+
     for h3_index in hex_indices:
         # Get hex center for storage
         center_lat, center_lon = h3.cell_to_latlng(h3_index)
         # Get hex boundary for area calculation
         boundary = h3.cell_to_boundary(h3_index)
         hex_area = h3.cell_area(h3_index, unit='m^2')
-        
+        total_hex_area_m2 += hex_area
+
         # Check if hex already claimed
         existing = await db.hexagons.find_one({"h3_index": h3_index}, {"_id": 0})
-        
+
         if existing:
             if existing["owner_id"] == user["user_id"]:
-                # Already own it — refresh maintenance date
+                # Already own it — refresh maintenance date only, no area credit
                 await db.hexagons.update_one(
                     {"h3_index": h3_index},
                     {"$set": {"last_maintained_at": now, "source_run_id": run_id}}
@@ -521,6 +544,8 @@ async def claim_hexes_from_run(run_id: str, request: Request) -> Dict[str, Any]:
                     }}
                 )
                 flipped_count += 1
+                newly_claimed_count += 1
+                newly_claimed_area_m2 += hex_area
                 # Reduce old owner's total area
                 await db.users.update_one(
                     {"user_id": old_owner},
@@ -541,49 +566,50 @@ async def claim_hexes_from_run(run_id: str, request: Request) -> Dict[str, Any]:
                 "source_run_id": run_id
             }
             await db.hexagons.insert_one(hex_doc)
-        
-        claimed_count += 1
-        total_area_m2 += hex_area
+            newly_claimed_count += 1
+            newly_claimed_area_m2 += hex_area
+
         newly_claimed_hexes.append({
             "h3_index": h3_index,
             "center_lat": center_lat,
             "center_lon": center_lon
         })
-    
-    # Update run with hex claim info
+
+    # Update run record (set, not inc — idempotent on re-claim)
     await db.runs.update_one(
         {"run_id": run_id},
         {"$set": {
             "hex_claims": list(hex_indices),
             "hex_count": len(hex_indices),
-            "area_claimed_m2": total_area_m2
+            "area_claimed_m2": total_hex_area_m2
         }}
     )
-    
-    # Update user's total area
-    await db.users.update_one(
-        {"user_id": user["user_id"]},
-        {"$inc": {"total_area_m2": total_area_m2}}
-    )
-    
+
+    # Update user's total area — only for hexes newly claimed this call
+    if newly_claimed_area_m2 > 0:
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$inc": {"total_area_m2": newly_claimed_area_m2}}
+        )
+
     # Broadcast live event to all dashboard viewers
     await dashboard_manager.broadcast({
         "type": "territory_claimed",
         "user_id": user["user_id"],
         "user_name": user["name"],
-        "hex_count": claimed_count,
+        "hex_count": newly_claimed_count,
         "flipped_count": flipped_count,
-        "area_m2": total_area_m2,
+        "area_m2": newly_claimed_area_m2,
         "hexes": newly_claimed_hexes[:20],  # Limit broadcast payload
         "timestamp": now
     })
-    
+
     return {
-        "claimed_count": claimed_count,
+        "claimed_count": newly_claimed_count,
         "flipped_count": flipped_count,
-        "total_area_m2": total_area_m2,
+        "total_area_m2": newly_claimed_area_m2,
         "hex_indices": list(hex_indices),
-        "message": f"Claimed {claimed_count} hexagons ({flipped_count} stolen)! Total: {total_area_m2:.0f} m²"
+        "message": f"Claimed {newly_claimed_count} new hexagons ({flipped_count} stolen)! Area: {newly_claimed_area_m2:.0f} m²"
     }
 
 # ===================== LEGACY CLAIMS ENDPOINTS =====================
@@ -811,8 +837,8 @@ async def get_user_stats(user_id: str) -> Dict[str, Any]:
         {"_id": 0, "points": 0}
     ).sort("started_at", -1).limit(5).to_list(5)
     
-    # Get claims count
-    claims_count = await db.claims.count_documents({"owner_id": user_id})
+    # Get hex count (H3-based territory)
+    claims_count = await db.hexagons.count_documents({"owner_id": user_id})
     
     # Get rank
     rank_pipeline = [
