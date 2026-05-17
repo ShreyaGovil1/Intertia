@@ -88,3 +88,12 @@ frontend/node_modules/.cache/default-development/4.pack
 # Environment files
 *.env
 *.env.*
+# Added by code-review-graph
+.code-review-graph/
+.claude/
+.speckit/
+.specify/
+.codex/
+.agenthub/
+specs/
+.pytest_cache/
